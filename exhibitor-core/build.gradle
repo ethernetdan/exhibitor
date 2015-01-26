@@ -9,13 +9,15 @@ dependencies {
         // JLine pulls this in as a compile dependency, they have fixed it in future versions
         exclude group: 'junit', module: 'junit'
     }
-    compile "org.apache.curator:curator-framework:${curatorVersion}"
-    compile "org.apache.curator:curator-recipes:${curatorVersion}"
-    compile "com.netflix.servo:servo-core:${servoVersion}"
-    compile "com.google.guava:guava:${guavaVersion}"
-    compile "javax.ws.rs:jsr311-api:${jaxRsVersion}"
-    compile "org.codehaus.jackson:jackson-mapper-asl:${jacksonVersion}"
-    compile "org.apache.lucene:lucene-core:${luceneVersion}"
+    compile 'org.apache.curator:curator-framework:' + curatorVersion
+    compile 'org.apache.curator:curator-recipes:' + curatorVersion
+    compile 'org.mousio:etcd4j:' + etcdVersion
+    compile 'com.netflix.servo:servo-core:' + servoVersion
+    compile 'com.google.guava:guava:' + guavaVersion
+    compile 'javax.ws.rs:jsr311-api:' + jaxRsVersion
+    compile 'org.codehaus.jackson:jackson-mapper-asl:' + jacksonVersion
+    compile 'org.apache.lucene:lucene-core:' + luceneVersion
+    compile 'org.mousio:etcd4j:' + etcdVersion
     
     compile "com.sun.jersey:jersey-client:${jerseyVersion}"
 
