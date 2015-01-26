@@ -47,12 +47,12 @@ public class EtcdPseudoLock implements PseudoLock {
         if (ownsLock) {
             throw new IllegalStateException("Already locked");
         }
-        lockStart = System.currentTimeMillis();
-        if (lock(maxWait, unit)) {
+        if (!lock(maxWait, unit)) {
             log.add(ActivityLog.Type.ERROR, String.format("Could not acquire lock within %d ms, key: %s"
                     , maxWait, lockPath));
             return false;
         }
+        ownsLock = true;
         return true;
     }
 
@@ -60,21 +60,22 @@ public class EtcdPseudoLock implements PseudoLock {
     public void unlock() throws Exception {
         try {
             client.put(lockPath, UNLOCKED_NODE).send().get();
+            ownsLock = false;
         } catch (Exception e) {
             throw new IllegalStateException("Failed to unlock", e.getCause());
         }
     }
 
     private boolean lock(long maxWait, TimeUnit unit) throws Exception {
+        lockStart = System.currentTimeMillis();
         if (timeLeft(maxWait, unit) <= 0) {
             return false;
         }
         try {
             EtcdKeysResponse.EtcdNode node = client.get(lockPath).send().get().node;
-            if (!node.value.equals(hostname) || !node.value.equals(UNLOCKED_NODE)) {
-                client.get(lockPath).waitForChange().timeout(timeLeft(maxWait, unit), TimeUnit.MILLISECONDS);
+            if (!node.value.equals(UNLOCKED_NODE)) {
+                client.get(lockPath).waitForChange().timeout(timeLeft(maxWait, unit), unit).send().get();
             }
-
             return createLock(node.modifiedIndex, timeLeft(maxWait, unit)) || lock(maxWait, unit);
         } catch (EtcdException e) {
             if (e.errorCode == 100) {
