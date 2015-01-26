@@ -105,8 +105,7 @@ public class EtcdConfigProvider implements ConfigProvider {
 
     @Override
     public PseudoLock newPseudoLock() throws Exception {
-        // TODO: implement
-        return null;
+        return new EtcdPseudoLock(client, lockPath, hostname);
     }
 
     private EtcdKeysResponse.EtcdNode getConfigNode() throws EtcdException, TimeoutException, IOException {
