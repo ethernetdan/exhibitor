@@ -126,11 +126,18 @@ public class EtcdConfigProvider implements ConfigProvider {
     }
 
     private EtcdKeysResponse.EtcdNode getConfigNode() throws EtcdException, TimeoutException, IOException {
-        EtcdKeyGetRequest request = client.get(configPath);
+        try {
+            EtcdKeyGetRequest request = client.get(configPath);
 
-        EtcdResponsePromise<EtcdKeysResponse> promise = request.send();
-        EtcdKeysResponse response = promise.get();
-        return response.node;
+            EtcdResponsePromise<EtcdKeysResponse> promise = request.send();
+            EtcdKeysResponse response = promise.get();
+            return response.node;
+        } catch(EtcdException e) {
+            if (e.errorCode == 100) {
+                return null;
+            }
+            throw e;
+        }
     }
 
     private void initializePath() throws Exception {

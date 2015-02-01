@@ -23,6 +23,7 @@ import mousio.etcd4j.requests.EtcdKeyPutRequest;
 import mousio.etcd4j.responses.EtcdException;
 import mousio.etcd4j.responses.EtcdKeysResponse;
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -33,6 +34,8 @@ public class EtcdPseudoLock implements PseudoLock {
 
     private boolean ownsLock = false;
     private long lockStart;
+    private long maxWait;
+    private TimeUnit unit;
 
     private static final String UNLOCKED_NODE = "RELEASED";
 
@@ -44,10 +47,13 @@ public class EtcdPseudoLock implements PseudoLock {
 
     @Override
     public boolean lock(ActivityLog log, long maxWait, TimeUnit unit) throws Exception {
+        lockStart = System.currentTimeMillis();
         if (ownsLock) {
             throw new IllegalStateException("Already locked");
         }
-        if (!lock(maxWait, unit)) {
+        this.maxWait = maxWait;
+        this.unit = unit;
+        if (!lock()) {
             log.add(ActivityLog.Type.ERROR, String.format("Could not acquire lock within %d ms, key: %s"
                     , maxWait, lockPath));
             return false;
@@ -66,46 +72,34 @@ public class EtcdPseudoLock implements PseudoLock {
         }
     }
 
-    private boolean lock(long maxWait, TimeUnit unit) throws Exception {
+    private boolean lock() throws Exception {
         lockStart = System.currentTimeMillis();
-        if (timeLeft(maxWait, unit) <= 0) {
-            return false;
-        }
         try {
-            EtcdKeysResponse.EtcdNode node = client.get(lockPath).send().get().node;
-            if (!node.value.equals(UNLOCKED_NODE)) {
-                client.get(lockPath).waitForChange().timeout(timeLeft(maxWait, unit), unit).send().get();
+            client.put(lockPath, hostname)
+                    .prevValue(UNLOCKED_NODE)
+                    .send().get();
+            return true;
+        } catch (IOException ie) {
+            long timeLeft = timeLeft();
+            if (!ie.getCause().getMessage().equals("java.lang.Exception: 412 Precondition Failed")  && timeLeft > 0) {
+                try {
+                    client.get(lockPath).waitForChange().timeout(timeLeft, TimeUnit.MILLISECONDS).send().get();
+                    lock();
+                } catch (TimeoutException te) {
+                    return false;
+                }
             }
-            return createLock(node.modifiedIndex, timeLeft(maxWait, unit)) || lock(maxWait, unit);
+            return false;
         } catch (EtcdException e) {
             if (e.errorCode == 100) {
-                // lock key does not exist
-                return createLock(-1, timeLeft(maxWait, unit)) || lock(maxWait, unit);
+                client.put(lockPath, UNLOCKED_NODE).prevExist(false).send().get();
             }
-            throw new RuntimeException("Lock could not be acquired.", e.getCause());
-        } catch (TimeoutException e) {
-            return false;
+            return lock();
         }
     }
 
-    private boolean createLock(long modifiedIndex, long timeout) throws Exception {
-        try {
-            EtcdKeyPutRequest req = client.put(lockPath, hostname).timeout(timeout, TimeUnit.MILLISECONDS);
-            if (modifiedIndex == -1) {
-                // lock key does not exist, attempt to create
-                req.prevExist(false).send().get();
-            } else {
-                req.prevIndex(modifiedIndex).send().get();
-            }
-            return true;
-        }
-        catch (EtcdException e) {
-            return false;
-        }
-    }
-
-    private long timeLeft(long duration, TimeUnit unit) {
+    private long timeLeft() {
         long elapsed = System.currentTimeMillis() - lockStart;
-        return unit.toMillis(duration) - elapsed;
+        return unit.toMillis(maxWait) - elapsed;
     }
 }
