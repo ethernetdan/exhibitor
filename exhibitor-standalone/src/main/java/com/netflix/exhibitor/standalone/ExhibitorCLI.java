@@ -79,6 +79,8 @@ public class ExhibitorCLI
     public static final String ZOOKEEPER_CONFIG_POLLING = "zkconfigpollms";
     public static final String NONE_CONFIG_DIRECTORY = "noneconfigdir";
     public static final String INITIAL_CONFIG_FILE = "defaultconfig";
+    public static final String ETCD_CONFIG_HOST = "etcdhost";
+    public static final String ETCD_CONFIG_PATH = "etcdpath";
 
     public static final String FILESYSTEMBACKUP = "filesystembackup";
     public static final String TIMEOUT = "timeout";
@@ -146,6 +148,10 @@ public class ExhibitorCLI
         zookeeperConfigOptions.addOption(null, ZOOKEEPER_CONFIG_RETRY, true, "The retry values to use in the form sleep-ms:retry-qty. The default is: " + DEFAULT_ZOOKEEPER_CONFIG_RETRY);
         zookeeperConfigOptions.addOption(null, ZOOKEEPER_CONFIG_POLLING, true, "The period in ms to check for changes in the config ensemble. The default is: " + DEFAULT_ZOOKEEPER_CONFIG_POLLING);
 
+        Options etcdConfigOptions = new Options();
+        etcdConfigOptions.addOption(null, ETCD_CONFIG_HOST, true, "Etcd host to connect to");
+        etcdConfigOptions.addOption(null, ETCD_CONFIG_PATH, true, "Etcd key to write/read configuration to");
+
         Options noneConfigOptions = new Options();
         noneConfigOptions.addOption(null, NONE_CONFIG_DIRECTORY, true, "Directory to store the local configuration file. Config type \"none\" is a special purpose type that should only be used when running a second ZooKeeper ensemble that is used for storing config. DO NOT USE THIS MODE for a normal ZooKeeper ensemble.");
 
@@ -183,6 +189,7 @@ public class ExhibitorCLI
         addAll("Configuration Options for Type \"s3\"", s3ConfigOptions);
         addAll("Configuration Options for Type \"zookeeper\"", zookeeperConfigOptions);
         addAll("Configuration Options for Type \"file\"", fileConfigOptions);
+        addAll("Configuration Options for Type \"etcd\"", etcdConfigOptions);
         addAll("Configuration Options for Type \"none\"", noneConfigOptions);
         addAll("Backup Options", backupOptions);
         addAll("Authorization Options", authOptions);

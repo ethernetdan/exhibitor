@@ -30,6 +30,7 @@ import com.netflix.exhibitor.core.config.IntConfigs;
 import com.netflix.exhibitor.core.config.JQueryStyle;
 import com.netflix.exhibitor.core.config.PropertyBasedInstanceConfig;
 import com.netflix.exhibitor.core.config.StringConfigs;
+import com.netflix.exhibitor.core.config.etcd.EtcdConfigProvider;
 import com.netflix.exhibitor.core.config.filesystem.FileSystemConfigProvider;
 import com.netflix.exhibitor.core.config.none.NoneConfigProvider;
 import com.netflix.exhibitor.core.config.s3.S3ConfigArguments;
@@ -41,6 +42,7 @@ import com.netflix.exhibitor.core.s3.PropertyBasedS3Credential;
 import com.netflix.exhibitor.core.s3.S3ClientFactoryImpl;
 import com.netflix.exhibitor.core.servo.ServoRegistration;
 import com.netflix.servo.jmx.JmxMonitorRegistry;
+import mousio.etcd4j.EtcdClient;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.ParseException;
@@ -72,6 +74,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
@@ -294,6 +297,10 @@ public class ExhibitorCreator
         else if ( configType.equals("zookeeper") )
         {
             configProvider = getZookeeperProvider(commandLine, useHostname, defaultProperties);
+        }
+        else if ( configType.equals("etcd") )
+        {
+            configProvider = getEtcdProvider(commandLine, useHostname, defaultProperties);
         }
         else if ( configType.equals("none") )
         {
@@ -526,6 +533,17 @@ public class ExhibitorCreator
     {
         String  prefix = cli.getOptions().hasOption(S3_CONFIG_PREFIX) ? commandLine.getOptionValue(S3_CONFIG_PREFIX) : DEFAULT_PREFIX;
         return new S3ConfigProvider(new S3ClientFactoryImpl(), awsCredentials, awsClientConfig, getS3Arguments(cli, commandLine.getOptionValue(S3_CONFIG), prefix), hostname, defaultProperties, s3Region);
+    }
+
+    private EtcdConfigProvider getEtcdProvider(CommandLine cli, String hostname, Properties defaultProperties) {
+        String host = cli.getOptionValue(ETCD_CONFIG_HOST);
+        String path = cli.getOptionValue(ETCD_CONFIG_PATH);
+        if ((host==null) || (path==null)) {
+            log.error("Both " + ETCD_CONFIG_HOST + " and " + ETCD_CONFIG_PATH + " are required with the config etcd");
+            return null;
+        }
+        EtcdClient client = new EtcdClient(URI.create(host));
+        return new EtcdConfigProvider(client, path, defaultProperties, hostname);
     }
 
     private void checkMutuallyExclusive(ExhibitorCLI cli, CommandLine commandLine, String option1, String option2) throws ExhibitorCreatorExit
