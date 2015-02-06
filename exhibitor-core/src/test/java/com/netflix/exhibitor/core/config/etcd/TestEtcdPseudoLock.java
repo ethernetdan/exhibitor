@@ -7,15 +7,14 @@ import mousio.etcd4j.responses.EtcdException;
 import mousio.etcd4j.responses.EtcdKeysResponse;
 import org.mockito.Mockito;
 import org.testng.Assert;
-import org.testng.annotations.BeforeClass;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import org.testng.annotations.*;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class TestEtcdPseudoLock {
     public EtcdClient client;
@@ -50,10 +49,37 @@ public class TestEtcdPseudoLock {
         PseudoLock lock1 = config1.newPseudoLock();
         PseudoLock lock2 = config2.newPseudoLock();
 
-        lock1.lock(Mockito.mock(ActivityLog.class), 8, TimeUnit.SECONDS);
+        Assert.assertTrue(lock1.lock(Mockito.mock(ActivityLog.class), 8, TimeUnit.SECONDS));
         Assert.assertFalse(lock2.lock(Mockito.mock(ActivityLog.class), 1, TimeUnit.SECONDS));
+        Assert.assertFalse(lock1.lock(Mockito.mock(ActivityLog.class), 8, TimeUnit.SECONDS));
         lock1.unlock();
 
         Assert.assertTrue(lock2.lock(Mockito.mock(ActivityLog.class), 30, TimeUnit.SECONDS));
     }
+
+    @Test(threadPoolSize = 5, invocationCount = 25,  timeOut = 10000)
+    public void testConcurrentAccess() throws Exception {
+        EtcdConfigProvider config = new EtcdConfigProvider(client, "test4", new Properties(), "host1");
+        PseudoLock lock = config.newPseudoLock();
+
+        ActivityLog log = Mockito.mock(ActivityLog.class);
+        long maxWait = 5;
+        TimeUnit unit = TimeUnit.SECONDS;
+        int iterations = 5;
+        for (int i=0; i<iterations; i++) {
+            try {
+                if (lock.lock(log, maxWait, unit)) {
+                    Assert.assertTrue(bool.compareAndSet(false, true));
+                    Assert.assertTrue(bool.compareAndSet(true, false));
+                    lock.unlock();
+                } else {
+                    Assert.fail("Lock failed to be acquired");
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Lock failed", e.getCause());
+            }
+        }
+    }
+
+    private static AtomicBoolean bool = new AtomicBoolean(false);
 }

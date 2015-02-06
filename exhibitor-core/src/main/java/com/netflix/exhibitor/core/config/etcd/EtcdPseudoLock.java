@@ -19,9 +19,7 @@ package com.netflix.exhibitor.core.config.etcd;
 import com.netflix.exhibitor.core.activity.ActivityLog;
 import com.netflix.exhibitor.core.config.PseudoLock;
 import mousio.etcd4j.EtcdClient;
-import mousio.etcd4j.requests.EtcdKeyPutRequest;
 import mousio.etcd4j.responses.EtcdException;
-import mousio.etcd4j.responses.EtcdKeysResponse;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +47,9 @@ public class EtcdPseudoLock implements PseudoLock {
     public boolean lock(ActivityLog log, long maxWait, TimeUnit unit) throws Exception {
         lockStart = System.currentTimeMillis();
         if (ownsLock) {
-            throw new IllegalStateException("Already locked");
+            log.add(ActivityLog.Type.ERROR, String.format("Lock already acquired for %d ms, key: %s"
+                    , maxWait, lockPath));
+            return false;
         }
         this.maxWait = maxWait;
         this.unit = unit;
@@ -73,26 +73,22 @@ public class EtcdPseudoLock implements PseudoLock {
     }
 
     private boolean lock() throws Exception {
-        lockStart = System.currentTimeMillis();
         try {
             client.put(lockPath, hostname)
                     .prevValue(UNLOCKED_NODE)
                     .send().get();
             return true;
         } catch (IOException ie) {
-            long timeLeft = timeLeft();
-            if (!ie.getCause().getMessage().equals("java.lang.Exception: 412 Precondition Failed")  && timeLeft > 0) {
-                try {
-                    client.get(lockPath).waitForChange().timeout(timeLeft, TimeUnit.MILLISECONDS).send().get();
-                    lock();
-                } catch (TimeoutException te) {
-                    return false;
-                }
-            }
-            return false;
+            return retry(ie);
         } catch (EtcdException e) {
             if (e.errorCode == 100) {
-                client.put(lockPath, UNLOCKED_NODE).prevExist(false).send().get();
+                try {
+                    client.put(lockPath, UNLOCKED_NODE).prevExist(false).send().get();
+                } catch (IOException ioe) {
+                    return retry(ioe);
+                }
+            } else {
+                throw e;
             }
             return lock();
         }
@@ -101,5 +97,20 @@ public class EtcdPseudoLock implements PseudoLock {
     private long timeLeft() {
         long elapsed = System.currentTimeMillis() - lockStart;
         return unit.toMillis(maxWait) - elapsed;
+    }
+
+    private boolean retry(IOException e) throws Exception {
+        long timeLeft = timeLeft();
+        if (!e.getCause().getMessage().equals("java.lang.Exception: 412 Precondition Failed")  && timeLeft > 0) {
+            try {
+                client.get(lockPath).waitForChange().timeout(timeLeft, TimeUnit.MILLISECONDS).send().get();
+                return lock();
+            } catch (TimeoutException te) {
+                return lock();
+            } catch (IOException io) {
+                return retry(io);
+            }
+        }
+        return false;
     }
 }
