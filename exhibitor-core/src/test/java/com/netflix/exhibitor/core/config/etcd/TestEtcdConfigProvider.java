@@ -28,11 +28,13 @@ public class TestEtcdConfigProvider {
     @BeforeMethod
     public void setUp() throws IOException, TimeoutException, EtcdException {
         EtcdKeysResponse response = client.getAll().send().get();
-        for (EtcdKeysResponse.EtcdNode node : response.node.nodes) {
-            if (node.dir) {
-                client.deleteDir(node.key).recursive().send();
-            } else {
-                client.delete(node.key).send();
+        if (response.node.nodes != null) {
+            for (EtcdKeysResponse.EtcdNode node : response.node.nodes) {
+                if (node.dir) {
+                    client.deleteDir(node.key).recursive().send();
+                } else {
+                    client.delete(node.key).send();
+                }
             }
         }
     }
