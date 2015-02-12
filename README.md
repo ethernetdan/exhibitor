@@ -1,4 +1,3 @@
-## DESCRIPTION
 A fork of Exhibitor allowing for the use of Etcd as a config provider.
 
 # Why would you connect one key/value store to another?
